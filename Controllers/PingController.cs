@@ -17,7 +17,7 @@ namespace HybridCast_ServerRelay.Controllers
             {
                 var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
 
-                var buffer = System.Text.Encoding.Unicode.GetBytes("Pong");
+                var buffer = System.Text.Encoding.UTF8.GetBytes("Pong");
 
                 var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
                 await webSocket.SendAsync(arraySegment, System.Net.WebSockets.WebSocketMessageType.Text, true, token);
