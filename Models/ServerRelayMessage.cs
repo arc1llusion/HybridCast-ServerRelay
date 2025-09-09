@@ -24,9 +24,9 @@ namespace HybridCast_ServerRelay.Models
         [JsonConverter(typeof(JsonStringEnumConverter<ServerMessageType>))]
         public ServerMessageType ServerMessageType { get; set; }
 
-        public Guid GameMessagePlayerFromId { get; set; }
+        public Guid? GameMessagePlayerFromId { get; set; } = null;
 
-        public string GameMessagePlayerFromName { get; set; } = string.Empty;
+        public string? GameMessagePlayerFromName { get; set; } = null;
 
         public object? Payload { get; set; } = JsonSerializer.Serialize("{}");
     }

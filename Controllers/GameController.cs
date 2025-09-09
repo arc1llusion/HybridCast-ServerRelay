@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 
 namespace HybridCast_ServerRelay.Controllers
@@ -14,6 +15,9 @@ namespace HybridCast_ServerRelay.Controllers
     public class GameController : Controller
     {
         private readonly IRoomStorage roomStorage;
+
+        private readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
         public GameController(IRoomStorage roomStorage)
         {
             this.roomStorage = roomStorage ?? throw new InvalidOperationException(nameof(IRoomStorage));
@@ -89,12 +93,12 @@ namespace HybridCast_ServerRelay.Controllers
         {
             if (webSocket.State == WebSocketState.Open)
             {
-                var message = JsonSerializer.Serialize(new ServerRelayMessage
+                var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
                     ServerMessageType = ServerMessageType.RoomCode,
                     Payload = JsonSerializer.Serialize(new { RoomCode = room.Code }),
-                });
+                }, jsonSerializerOptions);
 
                 var buffer = System.Text.Encoding.UTF8.GetBytes(message);
 
@@ -111,12 +115,12 @@ namespace HybridCast_ServerRelay.Controllers
                 {
                     if (player.WebSocket != webSocket)
                     {
-                        var message = JsonSerializer.Serialize(new ServerRelayMessage
+                        var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                         {
                             RelayMessageType = RelayMessageType.ServerMessage,
                             ServerMessageType = ServerMessageType.PlayerAdded,
                             Payload = JsonSerializer.Serialize(new { addedPlayer.Id, addedPlayer.Name }),
-                        });
+                        }, jsonSerializerOptions);
 
                         var buffer = Encoding.UTF8.GetBytes(message);
 
@@ -142,14 +146,14 @@ namespace HybridCast_ServerRelay.Controllers
                 {
                     if (player.WebSocket != webSocket)
                     {
-                        var message = JsonSerializer.Serialize(new ServerRelayMessage
+                        var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                         {
                             RelayMessageType = RelayMessageType.GameMessage,
                             ServerMessageType = ServerMessageType.None,
                             GameMessagePlayerFromId = newPlayer.Id,
                             GameMessagePlayerFromName = newPlayer.Name,
-                            Payload = String.Join(string.Empty, Encoding.UTF8.GetString(buffer).Where(x=> x != '\0')),
-                        });
+                            Payload = String.Join(string.Empty, Encoding.UTF8.GetString(buffer.Where(x => x != 0).ToArray()))
+                        }, jsonSerializerOptions);
 
                         var responseBuffer = Encoding.UTF8.GetBytes(message);
 
