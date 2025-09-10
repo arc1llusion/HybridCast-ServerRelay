@@ -13,14 +13,15 @@ namespace HybridCast_ServerRelay.Storage
         public Task<bool> CheckRoomCode(string roomCode);
         public Task<(Room? Room, Player? AddedPlayer)> CreateNewRoom(string playerName, WebSocket hostSocket);
         public Task<(Room? Room, Player? AddedPlayer)> AddPlayer(string roomCode, string playerName, WebSocket playerSocket);
+        public Task RemovePlayer(string roomCode, Guid playerId);
 
-        public Task<ConcurrentBag<Player>> GetRoomPlayers(string roomCode);
+        public Task<Player[]> GetRoomPlayers(string roomCode);
 
     }
 
     public class RoomStorage : IRoomStorage
     {
-        private readonly ConcurrentDictionary<Room, ConcurrentBag<Player>> Rooms = new();
+        private readonly ConcurrentDictionary<Room, ConcurrentDictionary<Guid, Player>> Rooms = new();
         private readonly SemaphoreSlim Slim = new(1, 1);
 
         public async Task<bool> CheckRoomCode(string roomCode)
@@ -49,9 +50,9 @@ namespace HybridCast_ServerRelay.Storage
             while (roomExists);
 
             var room = new Room(code);
-            if (!Rooms.TryAdd(room, new ConcurrentBag<Player>()))
+            if (!Rooms.TryAdd(room, new ConcurrentDictionary<Guid, Player>()))
             {
-                throw new InvalidOperationException("Couldn't add new room");
+                return (null, null);
             }
 
             var addedPlayer = new Player()
@@ -61,7 +62,10 @@ namespace HybridCast_ServerRelay.Storage
                 WebSocket = hostSocket
             };
 
-            Rooms[room].Add(addedPlayer);
+            if(!Rooms[room].TryAdd(addedPlayer.Id, addedPlayer))
+            {
+                return (null, null);
+            }
 
             return (room, addedPlayer);
         }
@@ -83,7 +87,7 @@ namespace HybridCast_ServerRelay.Storage
                         IsHost = false
                     };
 
-                    Rooms[room].Add(player);
+                    Rooms[room].TryAdd(player.Id, player);
 
                     return (room, player);
                 }
@@ -96,7 +100,7 @@ namespace HybridCast_ServerRelay.Storage
             }
         }
 
-        public async Task<ConcurrentBag<Player>> GetRoomPlayers(string roomCode)
+        public async Task RemovePlayer(string roomCode, Guid playerId)
         {
             await Slim.WaitAsync();
 
@@ -106,7 +110,29 @@ namespace HybridCast_ServerRelay.Storage
 
                 if (room != null)
                 {
-                    return Rooms[room];
+                    if(Rooms[room].TryGetValue(playerId, out var player))
+                    {
+                        Rooms[room].TryRemove(new KeyValuePair<Guid, Player>(playerId, player));
+                    }                    
+                }
+            }
+            finally
+            {
+                Slim.Release();
+            }
+        }
+
+        public async Task<Player[]> GetRoomPlayers(string roomCode)
+        {
+            await Slim.WaitAsync();
+
+            try
+            {
+                var room = Rooms.Keys.FirstOrDefault(x => x.Code == roomCode);
+
+                if (room != null)
+                {
+                    return Rooms[room].Values.ToArray();
                 }
 
                 return [];

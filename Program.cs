@@ -11,6 +11,7 @@ var app = builder.Build();
 
 var webSocketOptions = new WebSocketOptions
 {
+    KeepAliveTimeout = TimeSpan.FromSeconds(30),
     KeepAliveInterval = TimeSpan.FromMinutes(2)
 };
 

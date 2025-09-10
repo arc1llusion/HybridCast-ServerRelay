@@ -13,8 +13,12 @@ namespace HybridCast_ServerRelay.Models
     {
         None,
         RoomCode,
+        PlayerList,
+        PlayerInformation,
         PlayerAdded,
-        PlayerRemoved
+        PlayerRemoved,
+        PlayerDisconnected,
+        PlayerReconnected
     }
     public class ServerRelayMessage
     {

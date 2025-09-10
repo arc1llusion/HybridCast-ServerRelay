@@ -16,7 +16,7 @@ namespace HybridCast_ServerRelay.Controllers
     {
         private readonly IRoomStorage roomStorage;
 
-        private readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+        private readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = false };
 
         public GameController(IRoomStorage roomStorage)
         {
@@ -39,8 +39,13 @@ namespace HybridCast_ServerRelay.Controllers
         }
 
         [Route("newgame")]
-        public async Task NewGame(string playerName, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> NewGame(string playerName, CancellationToken cancellationToken = default)
         {
+            if(string.IsNullOrWhiteSpace(playerName))
+            {
+                return BadRequest("Player name must have a value");
+            }
+
             if (HttpContext.WebSockets.IsWebSocketRequest)
             {
                 var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
@@ -49,26 +54,36 @@ namespace HybridCast_ServerRelay.Controllers
 
                 if (room.Room != null && room.AddedPlayer != null)
                 {
-
                     await SendRoomCode(room.Room, webSocket, cancellationToken);
+                    await SendPlayerInformation(room.Room, room.AddedPlayer, webSocket, cancellationToken);
                     await WebSocketLoop(room.Room, room.AddedPlayer, webSocket, cancellationToken);
+                }
+                else
+                {
+                    return BadRequest("Couldn't create room");
                 }
             }
             else
             {
-                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return BadRequest("Must be a web socket request");
             }
+
+            return Ok();
         }
 
         [Route("connect")]
-        public async Task Connect(string roomCode, string playerName, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> Connect(string roomCode, string playerName, CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(playerName))
+            {
+                return BadRequest("Player name must have a value");
+            }
+
             bool result = await roomStorage.CheckRoomCode(roomCode);
 
             if(!result)
             {
-                HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-                return;
+                return NotFound("Room code not found");
             }
 
             if (HttpContext.WebSockets.IsWebSocketRequest)
@@ -79,14 +94,22 @@ namespace HybridCast_ServerRelay.Controllers
 
                 if (room.Room != null && room.AddedPlayer != null)
                 {
+                    await SendPlayerInformation(room.Room, room.AddedPlayer, webSocket, cancellationToken);
+                    await SendCurrentPlayerList(room.Room, webSocket, cancellationToken);
                     await SendPlayerAddedEvent(room.Room, room.AddedPlayer, webSocket, cancellationToken);
                     await WebSocketLoop(room.Room, room.AddedPlayer, webSocket, cancellationToken);
+                }
+                else
+                {
+                    return BadRequest("Couldn't add player to room");
                 }
             }
             else
             {
-                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return BadRequest("Must be a web socket request");
             }
+
+            return Ok();
         }
 
         private async Task SendRoomCode(Room room, WebSocket webSocket, CancellationToken cancellationToken = default)
@@ -98,6 +121,44 @@ namespace HybridCast_ServerRelay.Controllers
                     RelayMessageType = RelayMessageType.ServerMessage,
                     ServerMessageType = ServerMessageType.RoomCode,
                     Payload = JsonSerializer.Serialize(new { RoomCode = room.Code }),
+                }, jsonSerializerOptions);
+
+                var buffer = System.Text.Encoding.UTF8.GetBytes(message);
+
+                var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
+                await webSocket.SendAsync(arraySegment, System.Net.WebSockets.WebSocketMessageType.Text, true, default);
+            }
+        }
+
+        private async Task SendCurrentPlayerList(Room room, WebSocket webSocket, CancellationToken cancellationToken = default)
+        {
+            if (webSocket.State == WebSocketState.Open)
+            {
+                var players = await roomStorage.GetRoomPlayers(room.Code);
+
+                var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
+                {
+                    RelayMessageType = RelayMessageType.ServerMessage,
+                    ServerMessageType = ServerMessageType.PlayerList,
+                    Payload = JsonSerializer.Serialize(new { PlayerList = players.Select(x => new {x.Id, x.Name }) }),
+                }, jsonSerializerOptions);
+
+                var buffer = System.Text.Encoding.UTF8.GetBytes(message);
+
+                var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
+                await webSocket.SendAsync(arraySegment, System.Net.WebSockets.WebSocketMessageType.Text, true, default);
+            }
+        }
+
+        private async Task SendPlayerInformation(Room room, Player player, WebSocket webSocket, CancellationToken cancellationToken = default)
+        {
+            if (webSocket.State == WebSocketState.Open)
+            {
+                var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
+                {
+                    RelayMessageType = RelayMessageType.ServerMessage,
+                    ServerMessageType = ServerMessageType.PlayerInformation,
+                    Payload = JsonSerializer.Serialize(new { player.Id, player.Name }),
                 }, jsonSerializerOptions);
 
                 var buffer = System.Text.Encoding.UTF8.GetBytes(message);
@@ -134,13 +195,48 @@ namespace HybridCast_ServerRelay.Controllers
             }
         }
 
+        private async Task SendPlayerRemovedEvent(Room room, Player removedPlayer, CancellationToken cancellationToken = default)
+        {
+            foreach (var player in await this.roomStorage.GetRoomPlayers(room.Code))
+            {
+                if(player.WebSocket!.State != WebSocketState.Open)
+                {
+                    continue;
+                }
+
+                var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
+                {
+                    RelayMessageType = RelayMessageType.ServerMessage,
+                    ServerMessageType = ServerMessageType.PlayerRemoved,
+                    Payload = JsonSerializer.Serialize(new { removedPlayer.Id, removedPlayer.Name }),
+                }, jsonSerializerOptions);
+
+                var buffer = Encoding.UTF8.GetBytes(message);
+
+                await player.WebSocket!.SendAsync(
+                    new ArraySegment<byte>(buffer, 0, buffer.Length),
+                    WebSocketMessageType.Text,
+                    true,
+                    cancellationToken);
+            }
+        }
+
         private async Task WebSocketLoop(Room room, Player newPlayer, WebSocket webSocket, CancellationToken cancellationToken = default)
         {
+            bool closeStatusReceived = false;
             while (webSocket.State == WebSocketState.Open)
             {
                 var buffer = new byte[1024 * 4];
                 var receiveResult = await webSocket.ReceiveAsync(
                     new ArraySegment<byte>(buffer), cancellationToken);
+
+                if(receiveResult.CloseStatus != null)
+                {
+                    closeStatusReceived = true;
+                    await roomStorage.RemovePlayer(room.Code, newPlayer.Id);
+                    await SendPlayerRemovedEvent(room, newPlayer, cancellationToken);
+                    break;
+                }
 
                 foreach (var player in await this.roomStorage.GetRoomPlayers(room.Code))
                 {
@@ -164,6 +260,12 @@ namespace HybridCast_ServerRelay.Controllers
                             cancellationToken);
                     }
                 }
+            }
+
+            if(!closeStatusReceived)
+            {
+                await roomStorage.RemovePlayer(room.Code, newPlayer.Id);
+                await SendPlayerRemovedEvent(room, newPlayer, cancellationToken);
             }
         }
     }
