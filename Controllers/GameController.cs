@@ -2,6 +2,7 @@
 using HybridCast_ServerRelay.Storage;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
@@ -39,11 +40,12 @@ namespace HybridCast_ServerRelay.Controllers
         }
 
         [Route("newgame")]
-        public async Task<IActionResult> NewGame(string playerName, CancellationToken cancellationToken = default)
+        public async Task NewGame(string playerName, CancellationToken cancellationToken = default)
         {
             if(string.IsNullOrWhiteSpace(playerName))
             {
-                return BadRequest("Player name must have a value");
+                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
             }
 
             if (HttpContext.WebSockets.IsWebSocketRequest)
@@ -60,30 +62,31 @@ namespace HybridCast_ServerRelay.Controllers
                 }
                 else
                 {
-                    return BadRequest("Couldn't create room");
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Couldn't create room", cancellationToken);
                 }
             }
             else
             {
-                return BadRequest("Must be a web socket request");
+                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
             }
-
-            return Ok();
         }
 
         [Route("connect")]
-        public async Task<IActionResult> Connect(string roomCode, string playerName, CancellationToken cancellationToken = default)
+        public async Task Connect(string roomCode, string playerName, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(playerName))
             {
-                return BadRequest("Player name must have a value");
+                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
             }
 
             bool result = await roomStorage.CheckRoomCode(roomCode);
 
             if(!result)
             {
-                return NotFound("Room code not found");
+                HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
             }
 
             if (HttpContext.WebSockets.IsWebSocketRequest)
@@ -101,15 +104,14 @@ namespace HybridCast_ServerRelay.Controllers
                 }
                 else
                 {
-                    return BadRequest("Couldn't add player to room");
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Couldn't add player to room", cancellationToken);
                 }
             }
             else
             {
-                return BadRequest("Must be a web socket request");
+                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
             }
-
-            return Ok();
         }
 
         private async Task SendRoomCode(Room room, WebSocket webSocket, CancellationToken cancellationToken = default)

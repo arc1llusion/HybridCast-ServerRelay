@@ -17,12 +17,20 @@ namespace HybridCast_ServerRelay.Storage
 
         public Task<Player[]> GetRoomPlayers(string roomCode);
 
+        public Task CleanRooms();
+
     }
 
     public class RoomStorage : IRoomStorage
     {
         private readonly ConcurrentDictionary<Room, ConcurrentDictionary<Guid, Player>> Rooms = new();
         private readonly SemaphoreSlim Slim = new(1, 1);
+        private readonly ILogger<RoomStorage> Logger;
+
+        public RoomStorage(ILogger<RoomStorage> logger)
+        {
+            Logger = logger ?? throw new InvalidOperationException(nameof(ILogger<RoomStorage>));
+        }
 
         public async Task<bool> CheckRoomCode(string roomCode)
         {
@@ -136,6 +144,34 @@ namespace HybridCast_ServerRelay.Storage
                 }
 
                 return [];
+            }
+            finally
+            {
+                Slim.Release();
+            }
+        }
+
+        public async Task CleanRooms()
+        {
+            await Slim.WaitAsync();
+
+            try
+            {
+                List<KeyValuePair<Room, ConcurrentDictionary<Guid, Player>>> roomsToRemove = new();
+
+                foreach (var room in Rooms)
+                {
+                    if (Rooms[room.Key].Count == 0)
+                    {
+                        roomsToRemove.Add(room);
+                    }
+                }
+
+                foreach(var room in roomsToRemove)
+                {
+                    Logger.LogInformation($"Removed room: {room.Key.Code}");
+                    Rooms.TryRemove(room);
+                }
             }
             finally
             {

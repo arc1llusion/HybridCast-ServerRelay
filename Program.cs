@@ -1,3 +1,4 @@
+using HybridCast_ServerRelay.Services;
 using HybridCast_ServerRelay.Storage;
 using System.Text;
 
@@ -5,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddHostedService<CleanEmptyRoomsService>();
 builder.Services.AddSingleton<IRoomStorage, RoomStorage>();
 
 var app = builder.Build();
