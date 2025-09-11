@@ -15,12 +15,14 @@ namespace HybridCast_ServerRelay.Controllers
     [Route("[controller]")]
     public class GameController : Controller
     {
+        private readonly ILogger<GameController> logger;
         private readonly IRoomStorage roomStorage;
 
         private readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, WriteIndented = false };
 
-        public GameController(IRoomStorage roomStorage)
+        public GameController(ILogger<GameController> logger, IRoomStorage roomStorage)
         {
+            this.logger = logger ?? throw new InvalidOperationException(nameof(ILogger<GameController>));
             this.roomStorage = roomStorage ?? throw new InvalidOperationException(nameof(IRoomStorage));
         }
 
@@ -56,6 +58,8 @@ namespace HybridCast_ServerRelay.Controllers
 
                 if (room.Room != null && room.AddedPlayer != null)
                 {
+                    logger.LogInformation($"Room created {room.Room.Code} with player {room.AddedPlayer.Name}");
+
                     await SendRoomCode(room.Room, webSocket, cancellationToken);
                     await SendPlayerInformation(room.Room, room.AddedPlayer, webSocket, cancellationToken);
                     await WebSocketLoop(room.Room, room.AddedPlayer, webSocket, cancellationToken);
@@ -125,10 +129,10 @@ namespace HybridCast_ServerRelay.Controllers
                     Payload = JsonSerializer.Serialize(new { RoomCode = room.Code }),
                 }, jsonSerializerOptions);
 
-                var buffer = System.Text.Encoding.UTF8.GetBytes(message);
+                var buffer = Encoding.UTF8.GetBytes(message);
 
                 var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
-                await webSocket.SendAsync(arraySegment, System.Net.WebSockets.WebSocketMessageType.Text, true, default);
+                await webSocket.SendAsync(arraySegment, WebSocketMessageType.Text, true, default);
             }
         }
 
@@ -145,10 +149,10 @@ namespace HybridCast_ServerRelay.Controllers
                     Payload = JsonSerializer.Serialize(new { PlayerList = players.Select(x => new {x.Id, x.Name }) }),
                 }, jsonSerializerOptions);
 
-                var buffer = System.Text.Encoding.UTF8.GetBytes(message);
+                var buffer = Encoding.UTF8.GetBytes(message);
 
                 var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
-                await webSocket.SendAsync(arraySegment, System.Net.WebSockets.WebSocketMessageType.Text, true, default);
+                await webSocket.SendAsync(arraySegment, WebSocketMessageType.Text, true, default);
             }
         }
 
@@ -163,10 +167,10 @@ namespace HybridCast_ServerRelay.Controllers
                     Payload = JsonSerializer.Serialize(new { player.Id, player.Name }),
                 }, jsonSerializerOptions);
 
-                var buffer = System.Text.Encoding.UTF8.GetBytes(message);
+                var buffer = Encoding.UTF8.GetBytes(message);
 
                 var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
-                await webSocket.SendAsync(arraySegment, System.Net.WebSockets.WebSocketMessageType.Text, true, default);
+                await webSocket.SendAsync(arraySegment, WebSocketMessageType.Text, true, default);
             }
         }
 
