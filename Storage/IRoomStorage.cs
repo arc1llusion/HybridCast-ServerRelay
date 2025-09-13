@@ -11,7 +11,7 @@ namespace HybridCast_ServerRelay.Storage
     public interface IRoomStorage
     {
         public Task<bool> CheckRoomCode(string roomCode);
-        public Task<(Room? Room, Player? AddedPlayer)> CreateNewRoom(string playerName, WebSocket hostSocket);
+        public Task<string?> CreateNewRoom();
         public Task<(Room? Room, Player? AddedPlayer)> AddPlayer(string roomCode, string playerName, WebSocket playerSocket);
         public Task RemovePlayer(string roomCode, Guid playerId);
 
@@ -46,7 +46,7 @@ namespace HybridCast_ServerRelay.Storage
             }
         }
 
-        public async Task<(Room? Room, Player? AddedPlayer)> CreateNewRoom(string playerName, WebSocket hostSocket)
+        public async Task<string?> CreateNewRoom()
         {
             string code = Utility.RandomUtility.GenerateRoomCode(4);
             var roomExists = true;
@@ -60,22 +60,10 @@ namespace HybridCast_ServerRelay.Storage
             var room = new Room(code);
             if (!Rooms.TryAdd(room, new ConcurrentDictionary<Guid, Player>()))
             {
-                return (null, null);
+                return null;
             }
 
-            var addedPlayer = new Player()
-            {
-                IsHost = true,
-                Name = playerName,
-                WebSocket = hostSocket
-            };
-
-            if(!Rooms[room].TryAdd(addedPlayer.Id, addedPlayer))
-            {
-                return (null, null);
-            }
-
-            return (room, addedPlayer);
+            return room.Code;
         }
 
         public async Task<(Room? Room, Player? AddedPlayer)> AddPlayer(string roomCode, string playerName, WebSocket playerSocket)
@@ -92,7 +80,7 @@ namespace HybridCast_ServerRelay.Storage
                     {
                         Name = playerName,
                         WebSocket = playerSocket,
-                        IsHost = false
+                        IsHost = Rooms[room].IsEmpty
                     };
 
                     Rooms[room].TryAdd(player.Id, player);

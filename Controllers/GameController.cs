@@ -1,5 +1,6 @@
 ﻿using HybridCast_ServerRelay.Models;
 using HybridCast_ServerRelay.Storage;
+using HybridCast_ServerRelay.Utility;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Net;
@@ -27,75 +28,61 @@ namespace HybridCast_ServerRelay.Controllers
         }
 
         [HttpGet("CheckRoomCode")]
-        public async Task CheckRoomCode(string roomCode)
+        public async Task<IActionResult> CheckRoomCode(string roomCode)
         {
             bool result = await roomStorage.CheckRoomCode(roomCode);
 
-            if (result)
+            if (!result)
             {
-                HttpContext.Response.StatusCode = StatusCodes.Status200OK;
+                return NotFound();
             }
-            else
-            {
-                HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            }
+
+            return Ok();
         }
 
-        [Route("newgame")]
-        public async Task NewGame(string playerName, CancellationToken cancellationToken = default)
+        [HttpGet("newgame")]
+        //[ApiKey]
+        public async Task<ActionResult<CreateRoomResult>> NewGame(string playerName, CancellationToken cancellationToken = default)
         {
-            if(string.IsNullOrWhiteSpace(playerName))
+            var room = await roomStorage.CreateNewRoom();
+
+            if (room == null)
             {
-                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                return;
-            }
-
-            if (HttpContext.WebSockets.IsWebSocketRequest)
-            {
-                var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
-
-                var room = await roomStorage.CreateNewRoom(playerName, webSocket);
-
-                if (room.Room != null && room.AddedPlayer != null)
+                return BadRequest(new CreateRoomResult()
                 {
-                    logger.LogInformation($"Room created {room.Room.Code} with player {room.AddedPlayer.Name}");
+                    Error = "Room couldn't be created."
+                });
+            }
 
-                    await SendRoomCode(room.Room, webSocket, cancellationToken);
-                    await SendPlayerInformation(room.Room, room.AddedPlayer, webSocket, cancellationToken);
-                    await WebSocketLoop(room.Room, room.AddedPlayer, webSocket, cancellationToken);
-                }
-                else
-                {
-                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Couldn't create room", cancellationToken);
-                }
-            }
-            else
+            logger.LogInformation($"Room created {room}");
+
+            return Ok(new CreateRoomResult()
             {
-                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                return;
-            }
+                RoomCode = room
+            });
         }
 
         [Route("connect")]
+        //[ApiKey]
         public async Task Connect(string roomCode, string playerName, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(playerName))
-            {
-                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                return;
-            }
-
-            bool result = await roomStorage.CheckRoomCode(roomCode);
-
-            if(!result)
-            {
-                HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-                return;
-            }
-
             if (HttpContext.WebSockets.IsWebSocketRequest)
             {
                 var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+
+                if (string.IsNullOrWhiteSpace(playerName))
+                {
+                    await webSocket.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "Player name must be supplied", cancellationToken);
+                    return;
+                }
+
+                bool result = await roomStorage.CheckRoomCode(roomCode);
+
+                if (!result)
+                {
+                    await webSocket.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "Room code not found", cancellationToken);
+                    return;
+                }
 
                 var room = await roomStorage.AddPlayer(roomCode, playerName, webSocket);
 
@@ -115,24 +102,6 @@ namespace HybridCast_ServerRelay.Controllers
             {
                 HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
                 return;
-            }
-        }
-
-        private async Task SendRoomCode(Room room, WebSocket webSocket, CancellationToken cancellationToken = default)
-        {
-            if (webSocket.State == WebSocketState.Open)
-            {
-                var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
-                {
-                    RelayMessageType = RelayMessageType.ServerMessage,
-                    ServerMessageType = ServerMessageType.RoomCode,
-                    Payload = JsonSerializer.Serialize(new { RoomCode = room.Code }),
-                }, jsonSerializerOptions);
-
-                var buffer = Encoding.UTF8.GetBytes(message);
-
-                var arraySegment = new ArraySegment<byte>(buffer, 0, buffer.Length);
-                await webSocket.SendAsync(arraySegment, WebSocketMessageType.Text, true, default);
             }
         }
 
@@ -164,7 +133,7 @@ namespace HybridCast_ServerRelay.Controllers
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
                     ServerMessageType = ServerMessageType.PlayerInformation,
-                    Payload = JsonSerializer.Serialize(new { player.Id, player.Name }),
+                    Payload = JsonSerializer.Serialize(new { player.Id, player.Name, player.IsHost }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -233,8 +202,23 @@ namespace HybridCast_ServerRelay.Controllers
             while (webSocket.State == WebSocketState.Open)
             {
                 var buffer = new byte[1024 * 4];
-                var receiveResult = await webSocket.ReceiveAsync(
-                    new ArraySegment<byte>(buffer), cancellationToken);
+                WebSocketReceiveResult receiveResult;
+
+                try
+                {
+                    receiveResult = await webSocket.ReceiveAsync(
+                        new ArraySegment<byte>(buffer), cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError($"{room.Code} with {newPlayer.Name} unexpectedly closed with error: {ex.Unwind()}");
+
+                    if (webSocket.State == WebSocketState.Open)
+                    {
+                        await webSocket.CloseAsync(WebSocketCloseStatus.InternalServerError, "Unknown error caused close", cancellationToken);
+                    }
+                    break;
+                }
 
                 if(receiveResult.CloseStatus != null)
                 {

@@ -10,9 +10,6 @@ namespace HybridCast_ServerRelay.Services
 
         private readonly IRoomStorage roomStorage;
 
-        private Timer? _timer = null;
-
-
         public CleanEmptyRoomsService(IServiceProvider services, ILogger<CleanEmptyRoomsService> logger)
         {
             this.logger = logger ?? throw new InvalidOperationException(nameof(ILogger<CleanEmptyRoomsService>));

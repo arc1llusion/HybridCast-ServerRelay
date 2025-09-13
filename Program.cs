@@ -1,6 +1,8 @@
 using HybridCast_ServerRelay.Services;
 using HybridCast_ServerRelay.Storage;
+using HybridCast_ServerRelay.Utility;
 using System.Text;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,5 +36,9 @@ app.UseAuthorization();
 app.MapStaticAssets();
 
 app.MapControllers();
+
+
+//string output = System.Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Id = Guid.NewGuid().ToString(), Name = "HybridCast" }) + "::EndJson::" + RandomUtility.GenerateRoomCode(64) ) );
+//Console.WriteLine(output);
 
 app.Run();
