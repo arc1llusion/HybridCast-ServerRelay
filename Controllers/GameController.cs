@@ -114,8 +114,7 @@ namespace HybridCast_ServerRelay.Controllers
                 var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
-                    ServerMessageType = ServerMessageType.PlayerList,
-                    Payload = JsonSerializer.Serialize(new { PlayerList = players.Select(x => new {x.Id, x.Name }) }),
+                    Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerList, PlayerList = players.Select(x => new {x.Id, x.Name }) }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -132,8 +131,7 @@ namespace HybridCast_ServerRelay.Controllers
                 var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
-                    ServerMessageType = ServerMessageType.PlayerInformation,
-                    Payload = JsonSerializer.Serialize(new { player.Id, player.Name, player.IsHost }),
+                    Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerInformation, player.Id, player.Name, player.IsHost }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -154,8 +152,7 @@ namespace HybridCast_ServerRelay.Controllers
                         var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                         {
                             RelayMessageType = RelayMessageType.ServerMessage,
-                            ServerMessageType = ServerMessageType.PlayerAdded,
-                            Payload = JsonSerializer.Serialize(new { addedPlayer.Id, addedPlayer.Name }),
+                            Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerAdded, addedPlayer.Id, addedPlayer.Name }),
                         }, jsonSerializerOptions);
 
                         var buffer = Encoding.UTF8.GetBytes(message);
@@ -182,8 +179,7 @@ namespace HybridCast_ServerRelay.Controllers
                 var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
-                    ServerMessageType = ServerMessageType.PlayerRemoved,
-                    Payload = JsonSerializer.Serialize(new { removedPlayer.Id, removedPlayer.Name }),
+                    Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerRemoved, removedPlayer.Id, removedPlayer.Name }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -235,7 +231,6 @@ namespace HybridCast_ServerRelay.Controllers
                         var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                         {
                             RelayMessageType = RelayMessageType.GameMessage,
-                            ServerMessageType = ServerMessageType.None,
                             GameMessagePlayerFromId = newPlayer.Id,
                             GameMessagePlayerFromName = newPlayer.Name,
                             Payload = String.Join(string.Empty, Encoding.UTF8.GetString(buffer.Where(x => x != 0).ToArray()))
