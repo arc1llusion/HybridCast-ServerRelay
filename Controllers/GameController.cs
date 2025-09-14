@@ -114,7 +114,11 @@ namespace HybridCast_ServerRelay.Controllers
                 var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
-                    Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerList, PlayerList = players.Select(x => new {x.Id, x.Name }) }),
+                    Payload = JsonSerializer.Serialize(new ServerMessage
+                    {
+                        ServerMessageType = ServerMessageType.PlayerList,
+                        SubPayload = JsonSerializer.Serialize(new { PlayerList = players.Select(x => new { x.Id, x.Name }) })
+                    }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -131,7 +135,16 @@ namespace HybridCast_ServerRelay.Controllers
                 var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
-                    Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerInformation, player.Id, player.Name, player.IsHost }),
+                    Payload = JsonSerializer.Serialize(new ServerMessage
+                    { 
+                        ServerMessageType = ServerMessageType.PlayerInformation,
+                        SubPayload = JsonSerializer.Serialize(new
+                        {
+                            player.Id,
+                            player.Name,
+                            player.IsHost
+                        })
+                    }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -143,7 +156,7 @@ namespace HybridCast_ServerRelay.Controllers
 
         private async Task SendPlayerAddedEvent(Room room, Player addedPlayer, WebSocket webSocket, CancellationToken cancellationToken = default)
         {
-            if(webSocket.State == WebSocketState.Open)
+            if (webSocket.State == WebSocketState.Open)
             {
                 foreach (var player in await this.roomStorage.GetRoomPlayers(room.Code))
                 {
@@ -152,7 +165,12 @@ namespace HybridCast_ServerRelay.Controllers
                         var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                         {
                             RelayMessageType = RelayMessageType.ServerMessage,
-                            Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerAdded, addedPlayer.Id, addedPlayer.Name }),
+                            Payload = JsonSerializer.Serialize(
+                                new ServerMessage
+                                { 
+                                    ServerMessageType = ServerMessageType.PlayerAdded,
+                                    SubPayload = new { addedPlayer.Id, addedPlayer.Name }
+                                }),
                         }, jsonSerializerOptions);
 
                         var buffer = Encoding.UTF8.GetBytes(message);
@@ -171,7 +189,7 @@ namespace HybridCast_ServerRelay.Controllers
         {
             foreach (var player in await this.roomStorage.GetRoomPlayers(room.Code))
             {
-                if(player.WebSocket!.State != WebSocketState.Open)
+                if (player.WebSocket!.State != WebSocketState.Open)
                 {
                     continue;
                 }
@@ -179,7 +197,12 @@ namespace HybridCast_ServerRelay.Controllers
                 var message = JsonSerializer.Serialize<ServerRelayMessage>(new ServerRelayMessage
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
-                    Payload = JsonSerializer.Serialize(new { ServerMessageType = ServerMessageType.PlayerRemoved, removedPlayer.Id, removedPlayer.Name }),
+                    Payload = JsonSerializer.Serialize(
+                        new ServerMessage
+                        { 
+                            ServerMessageType = ServerMessageType.PlayerRemoved,  
+                            SubPayload = new { removedPlayer.Id, removedPlayer.Name }
+                        }),
                 }, jsonSerializerOptions);
 
                 var buffer = Encoding.UTF8.GetBytes(message);
@@ -216,7 +239,7 @@ namespace HybridCast_ServerRelay.Controllers
                     break;
                 }
 
-                if(receiveResult.CloseStatus != null)
+                if (receiveResult.CloseStatus != null)
                 {
                     closeStatusReceived = true;
                     await roomStorage.RemovePlayer(room.Code, newPlayer.Id);
@@ -247,7 +270,7 @@ namespace HybridCast_ServerRelay.Controllers
                 }
             }
 
-            if(!closeStatusReceived)
+            if (!closeStatusReceived)
             {
                 await roomStorage.RemovePlayer(room.Code, newPlayer.Id);
                 await SendPlayerRemovedEvent(room, newPlayer, cancellationToken);

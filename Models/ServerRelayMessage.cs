@@ -31,4 +31,12 @@ namespace HybridCast_ServerRelay.Models
 
         public object? Payload { get; set; } = JsonSerializer.Serialize("{}");
     }
+
+    public class ServerMessage
+    {
+        [JsonConverter(typeof(JsonStringEnumConverter<ServerMessageType>))]
+        public ServerMessageType ServerMessageType { get; set; }
+
+        public object? SubPayload { get; set; } = JsonSerializer.Serialize("{}");
+    }
 }
