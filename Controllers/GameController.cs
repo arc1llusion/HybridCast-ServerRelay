@@ -42,7 +42,7 @@ namespace HybridCast_ServerRelay.Controllers
 
         [HttpGet("newgame")]
         //[ApiKey]
-        public async Task<ActionResult<CreateRoomResult>> NewGame(string playerName, CancellationToken cancellationToken = default)
+        public async Task<ActionResult<CreateRoomResult>> NewGame(CancellationToken cancellationToken = default)
         {
             var room = await roomStorage.CreateNewRoom();
 
