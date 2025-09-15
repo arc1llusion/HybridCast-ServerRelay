@@ -136,7 +136,7 @@ namespace HybridCast_ServerRelay.Controllers
                 {
                     RelayMessageType = RelayMessageType.ServerMessage,
                     Payload = JsonSerializer.Serialize(new ServerMessage
-                    { 
+                    {
                         ServerMessageType = ServerMessageType.PlayerInformation,
                         SubPayload = JsonSerializer.Serialize(new
                         {
@@ -167,9 +167,9 @@ namespace HybridCast_ServerRelay.Controllers
                             RelayMessageType = RelayMessageType.ServerMessage,
                             Payload = JsonSerializer.Serialize(
                                 new ServerMessage
-                                { 
+                                {
                                     ServerMessageType = ServerMessageType.PlayerAdded,
-                                    SubPayload = new { addedPlayer.Id, addedPlayer.Name }
+                                    SubPayload = JsonSerializer.Serialize(new { addedPlayer.Id, addedPlayer.Name })
                                 }),
                         }, jsonSerializerOptions);
 
@@ -199,9 +199,9 @@ namespace HybridCast_ServerRelay.Controllers
                     RelayMessageType = RelayMessageType.ServerMessage,
                     Payload = JsonSerializer.Serialize(
                         new ServerMessage
-                        { 
-                            ServerMessageType = ServerMessageType.PlayerRemoved,  
-                            SubPayload = new { removedPlayer.Id, removedPlayer.Name }
+                        {
+                            ServerMessageType = ServerMessageType.PlayerRemoved,
+                            SubPayload = JsonSerializer.Serialize(new { removedPlayer.Id, removedPlayer.Name })
                         }),
                 }, jsonSerializerOptions);
 
