@@ -26,6 +26,7 @@ namespace HybridCast_ServerRelay.Storage
         private readonly ConcurrentDictionary<Room, ConcurrentDictionary<Guid, Player>> Rooms = new();
         private readonly SemaphoreSlim Slim = new(1, 1);
         private readonly ILogger<RoomStorage> Logger;
+        private readonly TimeSpan TimeToWaitToClean = TimeSpan.FromMinutes(15);
 
         public RoomStorage(ILogger<RoomStorage> logger)
         {
@@ -85,6 +86,11 @@ namespace HybridCast_ServerRelay.Storage
 
                     Rooms[room].TryAdd(player.Id, player);
 
+                    if (!Rooms[room].IsEmpty)
+                    {
+                        room.RemoveEmptyFlagIfExists();
+                    }
+
                     return (room, player);
                 }
 
@@ -109,6 +115,11 @@ namespace HybridCast_ServerRelay.Storage
                     if(Rooms[room].TryGetValue(playerId, out var player))
                     {
                         Rooms[room].TryRemove(new KeyValuePair<Guid, Player>(playerId, player));
+
+                        if (Rooms[room].IsEmpty)
+                        {
+                            room.SetEmptyTime();
+                        }
                     }                    
                 }
             }
@@ -146,10 +157,11 @@ namespace HybridCast_ServerRelay.Storage
             try
             {
                 List<KeyValuePair<Room, ConcurrentDictionary<Guid, Player>>> roomsToRemove = new();
+                DateTimeOffset UtcNow = DateTimeOffset.UtcNow;
 
                 foreach (var room in Rooms)
                 {
-                    if (Rooms[room.Key].Count == 0)
+                    if (Rooms[room.Key].Count == 0 && (UtcNow - room.Key.EmptiedTime) >= TimeToWaitToClean )
                     {
                         roomsToRemove.Add(room);
                     }
